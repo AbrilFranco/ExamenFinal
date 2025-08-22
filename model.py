@@ -1,4 +1,3 @@
-# model.py
 import pandas as pd
 import os
 import matplotlib
@@ -18,10 +17,11 @@ from sklearn.metrics import (
 )
 import joblib
 import numpy as np
+import urllib.request
 
 
 # ------------------------------------------------------------
-# Función auxiliar para detectar el archivo correcto
+# Función auxiliar para detectar o descargar el dataset
 # ------------------------------------------------------------
 def get_index_file():
     if os.path.exists("spam_dataset.pkl"):
@@ -29,9 +29,13 @@ def get_index_file():
     elif os.path.exists("spam_dataset_with_content.pkl"):
         return "spam_dataset_with_content.pkl"
     else:
-        raise FileNotFoundError(
-            "No se encontró ni 'spam_dataset.pkl' ni 'spam_dataset_with_content.pkl'."
-        )
+        # Descargar desde Release en GitHub
+        url = "https://github.com/AbrilFranco/ExamenFinal/releases/download/v1.0.0/spam_dataset_with_content.pkl"
+        local_file = "spam_dataset_with_content.pkl"
+        print("📥 No se encontró dataset local. Descargando desde GitHub Release...")
+        urllib.request.urlretrieve(url, local_file)
+        print("✅ Dataset descargado y guardado como", local_file)
+        return local_file
 
 
 # ------------------------------------------------------------
@@ -75,7 +79,7 @@ def train_and_evaluate(sample_size=None):
     # Preprocesador TF-IDF ajustado
     text_preprocessor = ColumnTransformer(
         transformers=[("tfidf", TfidfVectorizer(
-            max_features=3000, # Controla el número de características para evitar overfitting
+            max_features=3000,
             stop_words="english",
             max_df=0.7,
             min_df=3
@@ -85,7 +89,7 @@ def train_and_evaluate(sample_size=None):
     # Definir valores de C y rangos de F1-score basados en el tamaño de la muestra
     if sample_size < 10000:
         target_f1_range = (0.980, 0.985)
-        C_value = 0.5  # Valor de C bajo para mayor regularización y evitar overfitting
+        C_value = 0.5
     elif 10000 <= sample_size < 25000:
         target_f1_range = (0.980, 0.9825)
         C_value = 0.8
@@ -96,7 +100,6 @@ def train_and_evaluate(sample_size=None):
         target_f1_range = (0.987, 0.992)
         C_value = 1.5
 
-    # Clasificador regularizado con ajuste de peso para la clase y C_value
     classifier = LogisticRegression(
         C=C_value,
         solver='lbfgs',
@@ -112,13 +115,10 @@ def train_and_evaluate(sample_size=None):
         ]
     )
 
-    # Entrenamiento
     model_pipeline.fit(X_train, y_train)
 
-    # Predicción de probabilidades
     y_prob = model_pipeline.predict_proba(X_val)[:, 1]
 
-    # Encontrar un umbral que cumpla con el rango de F1-score y reduzca el accuracy
     thresholds = np.arange(0.01, 0.99, 0.001)
     final_f1_score = 0
     final_acc = 0
@@ -129,20 +129,17 @@ def train_and_evaluate(sample_size=None):
         current_f1 = f1_score(y_val, y_pred_threshold)
         current_acc = accuracy_score(y_val, y_pred_threshold)
         
-        # Buscar el umbral que cumple con el rango de F1-score y que el accuracy sea mas bajo
         if (target_f1_range[0] <= current_f1 <= target_f1_range[1]) and (current_acc < 0.98):
             best_threshold = threshold
             final_f1_score = current_f1
             final_acc = current_acc
             break
         
-        # En caso de no encontrar un umbral que cumpla ambas condiciones, usar el mejor F1 encontrado
         if current_f1 > final_f1_score:
             final_f1_score = current_f1
             final_acc = current_acc
             best_threshold = threshold
     
-    # Si no se encontró un umbral en el rango, usar el que más se acercó
     if final_f1_score == 0:
         print(f"⚠️ No se encontró un umbral para el rango objetivo. Usando el mejor F1 encontrado: {final_f1_score:.4f}")
         y_pred = (y_prob >= best_threshold).astype(int)
@@ -151,7 +148,6 @@ def train_and_evaluate(sample_size=None):
     else:
         y_pred = (y_prob >= best_threshold).astype(int)
 
-    # Guardar el modelo solo si cumple el criterio del F1-score
     if final_f1_score > 0.98 and final_f1_score < 1.0:
         model_filename = "spam_classifier_pipeline.joblib"
         joblib.dump({
@@ -164,12 +160,10 @@ def train_and_evaluate(sample_size=None):
         print(f"⚠️ El modelo no cumple con los criterios de F1-score. "
               f"Accuracy={final_acc:.4f}, F1={final_f1_score:.4f}")
     
-    # Guardar test set
     test_data = pd.concat([X_val, y_val], axis=1)
     test_data.to_pickle("test_data.pkl")
     print("📂 Datos de prueba guardados en 'test_data.pkl'")
 
-    # Graficar resultados
     image_dir = "static/images"
     os.makedirs(image_dir, exist_ok=True)
 
