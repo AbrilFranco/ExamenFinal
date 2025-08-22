@@ -12,5 +12,6 @@ if [ ! -s "data/spam_dataset_with_content.pkl" ]; then
 fi
 
 # Ejecutar con Gunicorn (Render provee $PORT)
-exec gunicorn --bind 0.0.0.0:$PORT app:app
+exec gunicorn --bind 0.0.0.0:"${PORT:-5000}" app:app
+
 
