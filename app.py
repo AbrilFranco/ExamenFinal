@@ -1,4 +1,4 @@
-import io, base64
+import os, base64
 import matplotlib.pyplot as plt
 from flask import Flask, render_template, request, redirect, url_for
 from model import train_and_evaluate, get_total_data
@@ -32,6 +32,7 @@ def train():
         f1_condition_met=(0.98 <= float(results["f1_score"].strip('%')) / 100 < 1.0)
     )
 
-# ⚠️ Solo para pruebas locales
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Obtener el puerto desde la variable de entorno, si no está presente usar el puerto 5000
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
